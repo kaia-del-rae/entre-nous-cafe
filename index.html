@@ -1037,11 +1037,12 @@ async function handlePlayerTurn(playerContent, emoji, label, displayLine){
     const r = await callClaude(buildSystemPrompt(G.customer), G.history);
     G.history.push({role:'assistant', content:r}); setThinking(false);
     const isLast     = G.turn >= G.maxTurns;
-    const naturalEnd = /goodbye|take care|head out|thank you.*much|i should go|feel a little|better now|heading home|good night|see you/i.test(r);
+    // Only detect natural ending after turn 6, and only on very explicit farewell phrases
+    const naturalEnd = G.turn >= 6 && /\b(goodbye|good-bye|i should go|i should get going|i'll head|heading home|take care now|good night|i'll leave you|time to go|i must be going)\b/i.test(r);
     type(r, ()=>{ if(isLast||naturalEnd) setTimeout(()=>endCustomer(G.customer),1400); else setInputVisible(true); });
   } catch(e){
     setThinking(false);
-    type('Thank you. Really.', ()=>setTimeout(()=>endCustomer(G.customer),1400));
+    type('Sorry, something went wrong. Try again.', ()=>setInputVisible(true));
   }
 }
 
