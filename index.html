@@ -992,7 +992,7 @@ async function startConvo(c){
     const r=await callClaude(sys,[{role:'user',content:opener}]);
     G.history.push({role:'user',content:opener}); G.history.push({role:'assistant',content:r});
     setThinking(false); type(r,()=>setInputVisible(true));
-  } catch(e){ setThinking(false); type('...just a coffee, please.',()=>setInputVisible(true)); }
+  } catch(e){ setThinking(false); setInputVisible(true); }
 }
 
 async function submitFreeInput(){
@@ -1042,7 +1042,8 @@ async function handlePlayerTurn(playerContent, emoji, label, displayLine){
     type(r, ()=>{ if(isLast||naturalEnd) setTimeout(()=>endCustomer(G.customer),1400); else setInputVisible(true); });
   } catch(e){
     setThinking(false);
-    type('Sorry, something went wrong. Try again.', ()=>setInputVisible(true));
+    // error already shown by showError() inside callClaude
+    setInputVisible(true);
   }
 }
 
@@ -1108,23 +1109,56 @@ window.addEventListener('DOMContentLoaded', () => {
 async function callClaude(system, messages){
   const key = ANTHROPIC_API_KEY;
   if(!key) throw new Error('No API key set');
-  const res = await fetch('https://api.anthropic.com/v1/messages',{
-    method:'POST',
-    headers:{
-      'Content-Type':'application/json',
-      'x-api-key': key,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
-    body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,system,messages})
-  });
-  if(!res.ok){
-    const errData = await res.json().catch(()=>({}));
-    const msg = errData?.error?.message || res.status;
-    throw new Error('API error: '+msg);
+
+  let res;
+  try {
+    res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-5',
+        max_tokens: 1024,
+        system,
+        messages,
+      }),
+    });
+  } catch(networkErr) {
+    // Network/CORS failure
+    const msg = networkErr.message || 'Network error';
+    showError('Connection failed: ' + msg);
+    throw networkErr;
   }
+
+  if(!res.ok){
+    let msg = 'Status ' + res.status;
+    try {
+      const errData = await res.json();
+      msg = errData?.error?.message || msg;
+    } catch(e){}
+    showError('API error ' + res.status + ': ' + msg);
+    throw new Error(msg);
+  }
+
   const d = await res.json();
-  return d.content.find(b=>b.type==='text')?.text||'';
+  return d.content.find(b => b.type === 'text')?.text || '';
+}
+
+function showError(msg){
+  // Show actual error in dialogue box so player can see what went wrong
+  const el = document.getElementById('dtxt');
+  const cur = document.getElementById('dcur');
+  const tag = document.getElementById('speaker-tag');
+  if(el) el.textContent = '[ ERROR: ' + msg + ' ]';
+  if(cur) cur.style.display = 'none';
+  if(tag) tag.childNodes[0].textContent = '[ System ]';
+  setThinking(false);
+  setInputVisible(true);
+  console.error('Entre Nous error:', msg);
 }
 
 </script>
